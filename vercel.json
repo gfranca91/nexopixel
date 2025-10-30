@@ -1,5 +1,5 @@
 {
-  "crons": [
+  "_crons": [
     {
       "path": "/api/cron/generate-post-morning",
       "schedule": "0 9 * * *"
