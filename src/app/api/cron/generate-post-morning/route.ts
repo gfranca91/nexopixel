@@ -3,6 +3,9 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabaseAdmin } from "../../../../lib/supabaseAdmin";
 import { uploadAndProcessImage } from "../../../../lib/uploadImage";
 import { setDefaultResultOrder } from "dns";
+import type { Database } from "../../../../lib/database.types";
+
+type PostInsert = Database["public"]["Tables"]["posts"]["Insert"];
 
 if (process.env.NODE_ENV === "development") {
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -17,7 +20,6 @@ interface GeneratedPost {
   slug: string;
   tags: string[];
 }
-
 interface NewsArticle {
   title: string;
   description: string;
@@ -27,82 +29,71 @@ interface NewsArticle {
   };
 }
 
-const CATEGORIES = ["Cinema Geek", "Séries TV", "Animes", "Jogos"];
-function getRandomCategory(): string {
-  return CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
-}
+const CATEGORIES: { [key: string]: string } = {
+  Cinema:
+    '"lançamento de filme" OR "crítica de filme" OR "trailer de filme" NOT "política" NOT "fofoca"',
+  Séries:
+    '"nova temporada" OR "estreia de série" OR "análise de série" NOT "política"',
+  Animes:
+    '"novo anime" OR "lançamento de anime" OR "review de anime" OR "Crunchyroll"',
+  Games:
+    '"lançamento de game" OR "review de video game" OR "atualização de patch" OR "PlayStation" OR "Xbox" OR "Nintendo Switch" OR "PC Gaming" NOT "comparação com vida real"',
+};
+const CATEGORY_NAMES = Object.keys(CATEGORIES);
 
-export async function GET(): Promise<NextResponse> {
-  console.log("CRON MANHÃ: Iniciado (09:00 UTC / 06:00 BSB)");
+async function processCategory(
+  category: string,
+  query: string,
+  geminiKey: string,
+  newsApiKey: string,
+  authorId: number | null
+): Promise<PostInsert | null> {
+  if (!authorId) {
+    console.error(`Autor não encontrado para a categoria: ${category}`);
+    return null;
+  }
 
   try {
-    const geminiKey = process.env.GOOGLE_GEMINI_API_KEY;
-    const newsApiKey = process.env.NEWS_API_KEY;
-
-    if (!geminiKey || !newsApiKey) {
-      throw new Error("Chaves de API (Gemini ou NewsAPI) não configuradas.");
-    }
-
-    const today = new Date();
-    const isMonday = today.getDay() === 1;
-
-    if (isMonday) {
-      console.log("CRON MANHÃ: É Segunda! Gerando resumo semanal...");
-      // TODO: Implementar lógica do resumo semanal
-    }
-
-    const category = getRandomCategory();
-    console.log(`CRON MANHÃ: Buscando notícias para a categoria: ${category}`);
+    console.log(`PROCESSANDO CATEGORIA: ${category}`);
 
     const newsResponse = await fetch(
       `https://newsapi.org/v2/everything?q=${encodeURIComponent(
-        category
-      )}&language=pt&sortBy=publishedAt&pageSize=10&apiKey=${newsApiKey}`
+        query
+      )}&language=pt&sortBy=publishedAt&pageSize=5&apiKey=${newsApiKey}`
     );
+    if (!newsResponse.ok) throw new Error(`NewsAPI falhou para ${category}`);
 
-    if (!newsResponse.ok)
-      throw new Error("Falha ao buscar notícias da NewsAPI.");
     const newsData = await newsResponse.json();
     const articles = newsData.articles as NewsArticle[];
-
     if (articles.length === 0) {
-      return NextResponse.json({
-        message: `Nenhuma notícia encontrada para: ${category}`,
-      });
+      console.log(`Nenhum artigo encontrado para: ${category}`);
+      return null;
     }
+    const article = articles[0];
 
-    const articleToProcess =
-      articles[Math.floor(Math.random() * articles.length)];
-    const originalImageUrl = articleToProcess.urlToImage || "";
-
-    console.log(`CRON MANHÃ: Processando imagem: ${originalImageUrl}`);
-    const processedImageUrl = await uploadAndProcessImage(originalImageUrl);
-    console.log(
-      `CRON MANHÃ: Imagem processada e salva em: ${processedImageUrl}`
+    const processedImageUrl = await uploadAndProcessImage(
+      article.urlToImage || ""
     );
 
-    console.log(
-      `CRON MANHÃ: Gerando post com base em: ${articleToProcess.title}`
-    );
     const genAI = new GoogleGenerativeAI(geminiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
-
     const prompt = `
-      Você é um redator para o blog de cultura geek "NexoPixel".
+      Você é um redator especialista para o blog "NexoPixel" (categoria: ${category}).
       Crie um post de blog a partir da seguinte notícia.
+      FOCO: A notícia é sobre a ${category}, não sobre política ou fofocas.
       
       Notícia:
-      - Título: ${articleToProcess.title}
-      - Descrição: ${articleToProcess.description}
-      - Fonte: ${articleToProcess.source.name}
+      - Título: ${article.title}
+      - Descrição: ${article.description}
+      - Fonte: ${article.source.name}
       
       Regras:
-      1. Crie um título novo e chamativo para o blog "NexoPixel".
-      2. Escreva um artigo de 4-5 parágrafos em português.
-      3. Crie um slug para a URL (ex: 'novo-filme-do-batman').
-      4. Sugira um array com 4 tags relevantes (ex: "Cinema", "DC", "Batman").
+      1. Crie um título novo e chamativo.
+      2. Escreva um artigo de 4-5 parágrafos.
+      3. Crie um slug para a URL.
+      4. Sugira um array com 4 tags.
       
-      Sua resposta deve ser APENAS um objeto JSON válido, sem nenhum texto antes ou depois. Use a seguinte estrutura:
+      Responda APENAS com um objeto JSON válido:
       {
         "title": "...",
         "content": "...",
@@ -113,77 +104,117 @@ export async function GET(): Promise<NextResponse> {
 
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
-
     const match = responseText.match(/\{[\s\S]*?\}/);
+
     if (!match) {
-      throw new Error(
-        "Nenhum objeto JSON válido encontrado na resposta do Gemini."
-      );
+      console.error("Falha no JSON do Gemini para:", article.title);
+      return null;
     }
 
-    let generatedPost: GeneratedPost;
-    try {
-      generatedPost = JSON.parse(match[0]);
-    } catch (err) {
-      throw new Error("Falha ao fazer parse do JSON gerado pelo Gemini.");
+    const generatedPost: GeneratedPost = JSON.parse(match[0]);
+
+    return {
+      title: generatedPost.title,
+      content: generatedPost.content,
+      slug: generatedPost.slug,
+      tags: generatedPost.tags,
+      image_url: processedImageUrl,
+      status: "draft",
+      author_id: authorId,
+      category: category,
+    };
+  } catch (error) {
+    console.error(`Falha ao processar categoria ${category}:`, error);
+    return null;
+  }
+}
+
+export async function GET(): Promise<NextResponse> {
+  console.log("CRON MANHÃ (LOTE POR CATEGORIA): Iniciado");
+
+  try {
+    const geminiKey = process.env.GOOGLE_GEMINI_API_KEY;
+    const newsApiKey = process.env.NEWS_API_KEY;
+    if (!geminiKey || !newsApiKey) {
+      throw new Error("Chaves de API (Gemini ou NewsAPI) não configuradas.");
+    }
+
+    if (new Date().getDay() === 1) {
+      console.log(
+        "CRON MANHÃ (LOTE): É Segunda! (Lógica de lançamentos pendente)"
+      );
     }
 
     const { data: authors, error: authorsError } = await supabaseAdmin
       .from("authors")
-      .select("id");
+      .select("id, name");
 
-    if (authorsError || !authors || authors.length === 0) {
-      throw new Error("Não foi possível buscar autores.");
+    if (authorsError || !authors || authors.length < 4) {
+      throw new Error("Não foi possível buscar os 4 autores Synapse.");
     }
-    const randomAuthorId =
-      authors[Math.floor(Math.random() * authors.length)].id;
 
-    const { data: newPost, error: insertError } = await supabaseAdmin
+    const authorMap = new Map<string, number>();
+    authors.forEach((author) => {
+      if (author.name === "Synapse Filmes") authorMap.set("Cinema", author.id);
+      if (author.name === "Synapse Séries") authorMap.set("Séries", author.id);
+      if (author.name === "Synapse Animes") authorMap.set("Animes", author.id);
+      if (author.name === "Synapse Games") authorMap.set("Games", author.id);
+    });
+
+    console.log(
+      `CRON MANHÃ (LOTE): Processando ${CATEGORY_NAMES.length} categorias em paralelo...`
+    );
+
+    const processingPromises = CATEGORY_NAMES.map((categoryName) =>
+      processCategory(
+        categoryName,
+        CATEGORIES[categoryName],
+        geminiKey,
+        newsApiKey,
+        authorMap.get(categoryName) || null
+      )
+    );
+
+    const newPostsData = await Promise.all(processingPromises);
+
+    const validNewPosts = newPostsData.filter(
+      (post) => post !== null
+    ) as PostInsert[];
+
+    if (validNewPosts.length === 0) {
+      throw new Error("Nenhum artigo pôde ser processado com sucesso.");
+    }
+
+    const { data: insertedPosts, error: insertError } = await supabaseAdmin
       .from("posts")
-      .insert({
-        title: generatedPost.title,
-        content: generatedPost.content,
-        slug: generatedPost.slug,
-        tags: generatedPost.tags,
-        image_url: processedImageUrl,
-        status: "draft",
-        author_id: randomAuthorId,
-        category: category,
-      })
-      .select()
-      .single();
+      .insert(validNewPosts)
+      .select("title, category");
 
     if (insertError) {
-      console.error("Erro ao salvar no Supabase:", insertError.message);
-      throw new Error(`Erro ao salvar no Supabase: ${insertError.message}`);
+      throw new Error(`Erro ao salvar posts em lote: ${insertError.message}`);
     }
 
-    if (!newPost) {
-      throw new Error("Post não foi criado ou retornado pelo Supabase.");
-    }
+    console.log(
+      `CRON MANHÃ (LOTE): ${insertedPosts.length} posts salvos com sucesso!`
+    );
 
-    console.log(`CRON MANHÃ: Post salvo! ID: ${newPost.id}`);
-
-    // --- 5. NOTIFICAÇÃO DO TELEGRAM (BLOCO SEPARADO) ---
     try {
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
       const chatId = process.env.TELEGRAM_CHAT_ID;
-
-      if (!botToken || !chatId) {
+      if (!botToken || !chatId)
         throw new Error("Chaves do Telegram não configuradas.");
-      }
 
       const message = `
-🚀 *Novo Rascunho Gerado (NexoPixel)!* 🚀
+🚀 *${insertedPosts.length} Novos Rascunhos Gerados (NexoPixel)!* 🚀
 
-*Título:* ${newPost.title}
-*Categoria:* ${newPost.category}
+${insertedPosts
+  .map((p) => `*- Categoria:* ${p.category}\n  *Título:* ${p.title}`)
+  .join("\n\n")}
 
 👉 [Revisar e publicar](httpsU://SEU_SITE_VAI_AQUI.vercel.app/admin/drafts)
       `;
 
       const telegramUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
-
       await fetch(telegramUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -194,46 +225,22 @@ export async function GET(): Promise<NextResponse> {
           disable_web_page_preview: true,
         }),
       });
-
-      console.log("CRON MANHÃ: Notificação do Telegram enviada com sucesso.");
-    } catch (telegramError: unknown) {
-      // Se a notificação falhar, apenas registramos o erro
-      // mas não falhamos o processo inteiro.
-      console.error("CRON MANHÃ: Falha ao enviar notificação do Telegram.");
-      const telegramErrorMessage =
-        telegramError instanceof Error
-          ? telegramError.message
-          : "Erro desconhecido no Telegram";
-      console.error(telegramErrorMessage);
-
-      // Vamos logar a causa-raiz, se existir
-      if (telegramError instanceof Error && telegramError.cause) {
-        console.error("Causa-Raiz (Telegram):", telegramError.cause);
-      }
+    } catch (telegramError) {
+      console.error(
+        "CRON MANHÃ (LOTE): Falha ao enviar notificação do Telegram."
+      );
     }
 
-    // O processo principal foi um sucesso
     return NextResponse.json({
-      message: "Novo rascunho de post criado com sucesso!",
-      post: newPost,
+      message: `${insertedPosts.length} novos rascunhos criados com sucesso!`,
+      posts: insertedPosts,
     });
   } catch (error: unknown) {
-    // --- 6. NOSSO CATCH DE DEPURAÇÃO AVANÇADA ---
-    console.error("CRON MANHÃ: FALHA GERAL. OBJETO DO ERRO COMPLETO:");
-    console.error(error); // Isso vai nos mostrar o objeto de erro inteiro
-
     const errorMessage =
       error instanceof Error ? error.message : "Erro desconhecido";
-
-    let fullErrorMessage = errorMessage;
-    if (error instanceof Error && error.cause) {
-      fullErrorMessage = `${errorMessage} | Causa-Raiz: ${error.cause}`;
-    }
-
-    console.error("CRON MANHÃ: Falha geral na execução.", fullErrorMessage);
-
+    console.error("CRON MANHÃ (LOTE): Falha geral na execução.", error);
     return NextResponse.json(
-      { ok: false, message: fullErrorMessage },
+      { ok: false, message: errorMessage },
       { status: 500 }
     );
   }
