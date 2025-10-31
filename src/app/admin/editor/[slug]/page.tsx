@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "../../../../lib/supabase/server";
 import { supabaseAdmin } from "../../../../lib/supabaseAdmin";
 import type { Database } from "../../../../lib/database.types";
+import EditForm from "./EditForm";
 
 type Post = Database["public"]["Tables"]["posts"]["Row"];
 
@@ -41,9 +42,7 @@ export default async function EditorPage({ params }: EditorPageProps) {
         Editando o post: <span className="font-semibold">{post.title}</span>
       </p>
 
-      <pre className="mt-8 rounded-md bg-gray-100 p-4">
-        {JSON.stringify(post, null, 2)}
-      </pre>
+      <EditForm post={post} />
     </div>
   );
 }
