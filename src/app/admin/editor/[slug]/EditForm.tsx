@@ -16,7 +16,6 @@ export default function EditForm({ post }: EditFormProps) {
   const router = useRouter();
   const supabase = createClient();
 
-  // Estados dos campos do post
   const [title, setTitle] = useState(post.title);
   const [content, setContent] = useState(post.content || "");
   const [imageUrl, setImageUrl] = useState(post.image_url || "");
@@ -25,6 +24,7 @@ export default function EditForm({ post }: EditFormProps) {
   const [filePreview, setFilePreview] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [message, setMessage] = useState("");
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -98,6 +98,56 @@ export default function EditForm({ post }: EditFormProps) {
       }
       router.push("/admin/dashboard");
       router.refresh();
+    }
+  };
+
+  const handleDelete = async () => {
+    if (
+      !window.confirm(
+        "Você tem certeza que quer excluir este rascunho? Esta ação não pode ser desfeita."
+      )
+    ) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setMessage("Excluindo...");
+
+    let imagePath: string | null = null;
+    if (post.image_url && post.image_url.includes("supabase.co")) {
+      try {
+        imagePath = post.image_url.split("/post-images/")[1];
+      } catch (e) {
+        console.error("Erro ao extrair o caminho da imagem", e);
+      }
+    }
+
+    try {
+      const operations = [];
+
+      if (imagePath) {
+        operations.push(
+          supabase.storage.from("post-images").remove([imagePath])
+        );
+      }
+
+      operations.push(supabase.from("posts").delete().eq("id", post.id));
+
+      const results = await Promise.allSettled(operations);
+
+      const dbResult = results[results.length - 1];
+      if (dbResult.status === "rejected") {
+        throw dbResult.reason;
+      }
+
+      setMessage("Rascunho excluído com sucesso! Redirecionando...");
+      router.push("/admin/dashboard");
+      router.refresh();
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Erro desconhecido";
+      setMessage(`Erro ao excluir: ${errorMessage}`);
+      setIsDeleting(false);
     }
   };
 
@@ -197,13 +247,24 @@ export default function EditForm({ post }: EditFormProps) {
       <div className="flex items-center justify-between">
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || isDeleting}
           className="rounded-md bg-blue-600 px-6 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
         >
           {isSubmitting ? "Publicando..." : "Aprovar e Publicar"}
         </button>
-        {message && <p className="text-sm text-gray-600">{message}</p>}
+
+        <button
+          type="button"
+          disabled={isSubmitting || isDeleting}
+          onClick={handleDelete}
+          className="rounded-md bg-red-600 px-6 py-2 text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50"
+        >
+          {isDeleting ? "Excluindo..." : "Excluir Rascunho"}
+        </button>
       </div>
+      {message && (
+        <p className="mt-4 text-center text-sm text-gray-600">{message}</p>
+      )}
     </form>
   );
 }

@@ -52,10 +52,8 @@ async function processCategory(
     console.error(`Autor não encontrado para a categoria: ${category}`);
     return null;
   }
-
   try {
     console.log(`PROCESSANDO CATEGORIA: ${category}`);
-
     const newsResponse = await fetch(
       `https://newsapi.org/v2/everything?q=${encodeURIComponent(
         query
@@ -70,29 +68,24 @@ async function processCategory(
       return null;
     }
     const article = articles[0];
-
     const processedImageUrl = await uploadAndProcessImage(
       article.urlToImage || ""
     );
-
     const genAI = new GoogleGenerativeAI(geminiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
     const prompt = `
       Você é um redator especialista para o blog "NexoPixel" (categoria: ${category}).
       Crie um post de blog a partir da seguinte notícia.
       FOCO: A notícia é sobre a ${category}, não sobre política ou fofocas.
-      
       Notícia:
       - Título: ${article.title}
       - Descrição: ${article.description}
       - Fonte: ${article.source.name}
-      
       Regras:
       1. Crie um título novo e chamativo.
       2. Escreva um artigo de 4-5 parágrafos.
       3. Crie um slug para a URL.
       4. Sugira um array com 4 tags.
-      
       Responda APENAS com um objeto JSON válido:
       {
         "title": "...",
@@ -101,18 +94,14 @@ async function processCategory(
         "tags": ["...", "..."]
       }
     `;
-
     const result = await model.generateContent(prompt);
     const responseText = result.response.text();
     const match = responseText.match(/\{[\s\S]*?\}/);
-
     if (!match) {
       console.error("Falha no JSON do Gemini para:", article.title);
       return null;
     }
-
     const generatedPost: GeneratedPost = JSON.parse(match[0]);
-
     return {
       title: generatedPost.title,
       content: generatedPost.content,
@@ -129,6 +118,67 @@ async function processCategory(
   }
 }
 
+async function generateWeeklyRecapPost(
+  geminiKey: string,
+  authorId: number | null
+): Promise<PostInsert | null> {
+  if (!authorId) {
+    console.error('Autor "Synapse Semanal" não encontrado.');
+    return null;
+  }
+
+  try {
+    console.log("PROCESSANDO: Resumo Semanal de Lançamentos");
+    const genAI = new GoogleGenerativeAI(geminiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+
+    const prompt = `
+      Você é o "Synapse Semanal", redator especialista em lançamentos do blog "NexoPixel".
+      Sua tarefa é criar um post especial sobre os "Principais Lançamentos da Semana".
+      
+      Regras:
+      1. Crie um título chamativo, ex: "Lançamentos Mais Aguardados da Semana: O Que Chega ao Cinema, Séries, Animes e Games".
+      2. Escreva um artigo de 4-5 parágrafos.
+      3. O artigo deve focar apenas nos lançamentos MAIS AGUARDADOS e RELEVANTES desta semana (Cinema, Séries, Animes e Games). Não liste tudo, apenas os destaques.
+      4. Crie um slug para a URL (ex: 'lancamentos-semana-data').
+      5. Sugira um array com 4 tags (ex: "Lançamentos", "Cinema", "Games", "Séries").
+      
+      Responda APENAS com um objeto JSON válido:
+      {
+        "title": "...",
+        "content": "...",
+        "slug": "...",
+        "tags": ["...", "..."]
+      }
+    `;
+
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+    const match = responseText.match(/\{[\s\S]*?\}/);
+
+    if (!match) {
+      console.error("Falha no JSON do Gemini para: Resumo Semanal");
+      return null;
+    }
+
+    const generatedPost: GeneratedPost = JSON.parse(match[0]);
+
+    return {
+      title: generatedPost.title,
+      content: generatedPost.content,
+      slug: generatedPost.slug,
+      tags: generatedPost.tags,
+      image_url: null,
+      status: "draft",
+      author_id: authorId,
+      category: "Resumo Semanal",
+    };
+  } catch (error) {
+    console.error("Falha ao gerar Resumo Semanal:", error);
+    return null;
+  }
+}
+
 export async function GET(): Promise<NextResponse> {
   console.log("CRON MANHÃ (LOTE POR CATEGORIA): Iniciado");
 
@@ -139,41 +189,45 @@ export async function GET(): Promise<NextResponse> {
       throw new Error("Chaves de API (Gemini ou NewsAPI) não configuradas.");
     }
 
-    if (new Date().getDay() === 1) {
-      console.log(
-        "CRON MANHÃ (LOTE): É Segunda! (Lógica de lançamentos pendente)"
-      );
-    }
-
     const { data: authors, error: authorsError } = await supabaseAdmin
       .from("authors")
       .select("id, name");
 
-    if (authorsError || !authors || authors.length < 4) {
-      throw new Error("Não foi possível buscar os 4 autores Synapse.");
+    if (authorsError || !authors) {
+      throw new Error("Não foi possível buscar os autores.");
     }
 
     const authorMap = new Map<string, number>();
+    let recapAuthorId: number | null = null;
+
     authors.forEach((author) => {
       if (author.name === "Synapse Filmes") authorMap.set("Cinema", author.id);
       if (author.name === "Synapse Séries") authorMap.set("Séries", author.id);
       if (author.name === "Synapse Animes") authorMap.set("Animes", author.id);
       if (author.name === "Synapse Games") authorMap.set("Games", author.id);
+      if (author.name === "Synapse Semanal") recapAuthorId = author.id;
     });
 
-    console.log(
-      `CRON MANHÃ (LOTE): Processando ${CATEGORY_NAMES.length} categorias em paralelo...`
+    const processingPromises: Promise<PostInsert | null>[] = CATEGORY_NAMES.map(
+      (categoryName) =>
+        processCategory(
+          categoryName,
+          CATEGORIES[categoryName],
+          geminiKey,
+          newsApiKey,
+          authorMap.get(categoryName) || null
+        )
     );
 
-    const processingPromises = CATEGORY_NAMES.map((categoryName) =>
-      processCategory(
-        categoryName,
-        CATEGORIES[categoryName],
-        geminiKey,
-        newsApiKey,
-        authorMap.get(categoryName) || null
-      )
-    );
+    const isMonday = new Date().getDay() === 1;
+    if (isMonday) {
+      console.log(
+        "CRON MANHÃ (LOTE): É Segunda! Adicionando Resumo Semanal..."
+      );
+      processingPromises.push(
+        generateWeeklyRecapPost(geminiKey, recapAuthorId)
+      );
+    }
 
     const newPostsData = await Promise.all(processingPromises);
 
