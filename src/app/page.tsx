@@ -278,7 +278,7 @@ export default async function HomePage() {
                 </Link>
               ))}
               <Link
-                href="/lancamentos"
+                href="/releases"
                 className="block text-center font-semibold text-blue-600 hover:underline"
               >
                 Ver todos os lançamentos &gt;
