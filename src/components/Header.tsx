@@ -1,6 +1,13 @@
+// src/components/Header.tsx
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 
 export default function Header() {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
   return (
     <header className="border-b">
       <div className="mx-auto max-w-7xl px-4 py-6 md:px-8">
