@@ -12,7 +12,7 @@ export default function Header() {
             {["Games", "Animes", "Cinema", "Séries"].map((cat) => (
               <Link
                 key={cat}
-                href={`/categoria/${cat.toLowerCase()}`}
+                href={`/category/${cat.toLowerCase()}`}
                 className="font-semibold text-gray-700 hover:text-blue-700"
               >
                 {cat}
