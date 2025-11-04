@@ -80,6 +80,7 @@ export default async function HomePage() {
                 fill
                 className="object-cover transition-transform duration-300 group-hover:scale-105"
                 unoptimized
+                loading="eager"
               />
             )}
             <div className="absolute inset-0 bg-linear-to-t from-black/70 via-black/40 to-transparent" />
