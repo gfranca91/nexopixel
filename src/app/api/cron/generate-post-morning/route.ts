@@ -31,13 +31,13 @@ interface NewsArticle {
 
 const CATEGORIES: { [key: string]: string } = {
   Cinema:
-    '"lançamento de filme" OR "crítica de filme" OR "trailer de filme" NOT "política" NOT "fofoca"',
+    '("filme" OR "cinema") AND ("trailer" OR "crítica" OR "elenco") NOT "fofoca" NOT "política"',
   Séries:
-    '"nova temporada" OR "estreia de série" OR "análise de série" NOT "política"',
+    '"nova temporada" OR "estreia de série" OR "análise de série" OR "elenco" OR "cancelada" OR "atraso filmagem" NOT "política" NOT "fofoca"',
   Animes:
-    '"novo anime" OR "lançamento de anime" OR "review de anime" OR "Crunchyroll"',
+    '("anime" OR "mangá") AND ("review" OR "nova temporada" OR "lançamento") NOT "fofoca" NOT "live action"',
   Games:
-    '"lançamento de game" OR "review de video game" OR "atualização de patch" OR "PlayStation" OR "Xbox" OR "Nintendo Switch" OR "PC Gaming" NOT "comparação com vida real"',
+    '"review de video game" OR "atualização de patch" OR "bug de jogo" OR "atraso de jogo" OR "elenco de jogo" OR "PlayStation" OR "Xbox" OR "Nintendo" OR "PC Gaming" NOT "polícia" NOT "comparação com vida real" NOT "fofoca"',
 };
 const CATEGORY_NAMES = Object.keys(CATEGORIES);
 
@@ -127,28 +127,58 @@ async function generateWeeklyRecapPost(
     return null;
   }
 
+  const startDate = new Date();
+  const endDate = new Date();
+  endDate.setDate(startDate.getDate() + 6);
+
+  const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
+    day: "numeric",
+    month: "long",
+  });
+  const yearFormatter = new Intl.DateTimeFormat("pt-BR", { year: "numeric" });
+
+  const startDateString = dateFormatter.format(startDate);
+  const endDateString = dateFormatter.format(endDate);
+  const currentYear = yearFormatter.format(startDate);
+
+  const slugDate = startDate.toISOString().split("T")[0];
+
   try {
     console.log("PROCESSANDO: Resumo Semanal de Lançamentos");
     const genAI = new GoogleGenerativeAI(geminiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
 
     const prompt = `
-      Você é o "Synapse Semanal", redator especialista em lançamentos do blog "NexoPixel".
-      Sua tarefa é criar um post especial sobre os "Principais Lançamentos da Semana".
-      
+      Você é o "Radar Semanal", redator especialista em lançamentos do blog "NexoPixel".
+      Sua tarefa é criar um post listando os PRINCIPAIS lançamentos da semana, começando de ${startDateString} até ${endDateString} de ${currentYear}.
+
       Regras:
-      1. Crie um título chamativo, ex: "Lançamentos Mais Aguardados da Semana: O Que Chega ao Cinema, Séries, Animes e Games".
-      2. Escreva um artigo de 4-5 parágrafos.
-      3. O artigo deve focar apenas nos lançamentos MAIS AGUARDADOS e RELEVANTES desta semana (Cinema, Séries, Animes e Games). Não liste tudo, apenas os destaques.
-      4. Crie um slug para a URL (ex: 'lancamentos-semana-data').
+      1. Crie um título chamativo, ex: "Lançamentos da Semana (${startDateString} a ${endDateString}): Os Destaques de Games, Cinema, Séries e Animes".
+      2. O "content" deve ser uma lista organizada por dia e categoria. Use Markdown.
+      3. O artigo deve focar apenas nos lançamentos MAIS AGUARDADOS e RELEVANTES. Não liste tudo, apenas os destaques.
+      4. Crie um slug para a URL.
       5. Sugira um array com 4 tags (ex: "Lançamentos", "Cinema", "Games", "Séries").
-      
+
+      Exemplo de formato para o "content":
+      "Aqui estão os destaques mais esperados que chegam esta semana...
+
+      ## Segunda-feira, ${startDateString}
+      * **Nome do Lançamento 1 (Categoria)** - Breve descrição.
+      * **Nome do Lançamento 2 (Categoria)** - Breve descrição.
+
+      ## Terça-feira, ...
+      * Nenhum grande lançamento hoje.
+
+      ## Quarta-feira, ...
+      * **Nome do Lançamento 3 (Categoria)** - Breve descrição.
+      "
+
       Responda APENAS com um objeto JSON válido:
       {
         "title": "...",
         "content": "...",
-        "slug": "...",
-        "tags": ["...", "..."]
+        "slug": "${`lancamentos-semana-${slugDate}`}",
+        "tags": ["Lançamentos", "Games", "Séries", "Cinema"]
       }
     `;
 
@@ -265,7 +295,7 @@ ${insertedPosts
   .map((p) => `*- Categoria:* ${p.category}\n  *Título:* ${p.title}`)
   .join("\n\n")}
 
-👉 [Revisar e publicar](httpsU://SEU_SITE_VAI_AQUI.vercel.app/admin/drafts)
+👉 [Revisar e publicar](https://nexopixel.vercel.app/admin/dashboard)
       `;
 
       const telegramUrl = `https://api.telegram.org/bot${botToken}/sendMessage`;
