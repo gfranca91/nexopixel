@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useState } from "react";
 
 export default function Header() {
@@ -21,8 +22,15 @@ export default function Header() {
     <header className="border-b relative">
       <div className="mx-auto max-w-7xl px-4 py-6 md:px-8">
         <div className="flex items-center justify-between">
-          <Link href="/" className="text-4xl font-extrabold text-blue-700">
-            NexoPixel
+          <Link href="/" aria-label="Voltar para a Home">
+            <Image
+              src="/np-4.png"
+              alt="NexoPixel Logo"
+              width={280}
+              height={40}
+              priority
+              unoptimized
+            />
           </Link>
 
           <div className="flex items-center space-x-4 md:space-x-6">

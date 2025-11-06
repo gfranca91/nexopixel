@@ -230,12 +230,12 @@ export default async function HomePage() {
             <h2 className="mb-4 border-b-2 border-red-700 pb-2 text-xl font-bold uppercase">
               Lançamentos da Semana
             </h2>
-            <div className="space-y-4">
+            <div>
               {mainRecapPost && (
                 <Link
                   href={`/${mainRecapPost.slug}`}
                   key={mainRecapPost.id}
-                  className="group"
+                  className="group mb-6 block"
                 >
                   {mainRecapPost.image_url && (
                     <Image
@@ -255,32 +255,39 @@ export default async function HomePage() {
                   </p>
                 </Link>
               )}
-              {otherRecapPosts.map((post) => (
-                <Link
-                  href={`/${post.slug}`}
-                  key={post.id}
-                  className="group flex items-center gap-4"
-                >
-                  {post.image_url && (
-                    <Image
-                      src={post.image_url}
-                      alt={post.title}
-                      width={100}
-                      height={60}
-                      className="h-16 w-24 shrink-0 rounded-md object-cover"
-                      unoptimized
-                    />
-                  )}
-                  <div>
-                    <h4 className="font-semibold text-gray-900 group-hover:text-blue-700">
-                      {post.title}
-                    </h4>
-                  </div>
-                </Link>
-              ))}
+
+              <div className="space-y-6">
+                {otherRecapPosts.map((post) => (
+                  <Link
+                    href={`/${post.slug}`}
+                    key={post.id}
+                    className="group flex items-center gap-4"
+                  >
+                    {post.image_url && (
+                      <Image
+                        src={post.image_url}
+                        alt={post.title}
+                        width={100}
+                        height={60}
+                        className="h-16 w-24 shrink-0 rounded-md object-cover"
+                        unoptimized
+                      />
+                    )}
+                    <div className="grow">
+                      <h4 className="font-semibold text-gray-900 group-hover:text-blue-700">
+                        {post.title}
+                      </h4>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Por {post.authors?.name || "NexoPixel"}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+
               <Link
                 href="/releases"
-                className="block text-center font-semibold text-blue-600 hover:underline"
+                className="mt-6 block text-center font-semibold text-blue-600 hover:underline"
               >
                 Ver todos os lançamentos &gt;
               </Link>

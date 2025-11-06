@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 const IconFacebook = () => (
   <svg
@@ -38,8 +39,16 @@ export default function Footer() {
     <footer className="mt-12 border-t bg-gray-900 p-8 text-gray-400">
       <div className="mx-auto max-w-7xl">
         <div className="grid grid-cols-1 gap-8 text-center lg:grid-cols-3 lg:text-left">
-          <div>
-            <h3 className="text-2xl font-bold text-white">NexoPixel</h3>
+          <div className="flex justify-center lg:justify-start">
+            <Link href="/" aria-label="Voltar para a Home">
+              <Image
+                src="/np-4.png"
+                alt="NexoPixel Logo"
+                width={280}
+                height={40}
+                unoptimized
+              />
+            </Link>
           </div>
 
           <div>
