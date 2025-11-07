@@ -43,6 +43,7 @@ A "human-in-the-loop" (the admin) then logs into a secure dashboard to review, e
   - Server-side search functionality (`/search`) querying the database.
 - **Polished UI/UX:** A complex `"use client"` Header with a responsive hamburger menu and a "click-to-reveal" search overlay.
 - **Telegram Notifications:** Integrated bot notifies admin of new drafts.
+- **Automated Social Publishing (iPaaS):** Uses Supabase Webhooks listening to `UPDATE` events on the `posts` table. When a post's `status` changes from `draft` to `published`, it triggers a Make.com scenario that automatically publishes the post's image and title to the official Instagram page.
 
 ---
 
@@ -79,6 +80,8 @@ This project demonstrates several advanced architecture patterns:
 3.  **Protected Routes (Middleware):** The entire admin dashboard (`/admin/**`) is protected using Next.js `middleware.ts`. It verifies the user's auth session and redirects them to `/login` if they are not authenticated.
 
 4.  **Parallel Backend-for-Frontend (BFF):** The Cron Job API routes act as a BFF, orchestrating multiple complex tasks (`Promise.all`) to feed data to the frontend, all while managing platform time limits (`maxDuration`).
+
+5.  **Event-Driven Publishing (iPaaS Workflow):** The project demonstrates an advanced event-driven architecture. Instead of a manual "publish to social" button, the database itself is the trigger. A Supabase Webhook listens for `UPDATE` events. When an admin publishes a post, the webhook instantly sends a payload (with the `record` and `old_record`) to a Make.com (iPaaS) scenario. This scenario validates the status change (`old_record.status == 'draft'` AND `record.status == 'published'`) and immediately triggers the Instagram API, completing the 'content-to-social' pipeline asynchronously without any extra clicks from the admin.
 
 ---
 
@@ -176,6 +179,7 @@ Um "humano-no-circuito" (o administrador) então entra em um painel seguro para 
   - Funcionalidade de busca (`/search`) renderizada no servidor.
 - **UI/UX Polida:** Um Header complexo (`"use client"`) com menu hambúrguer responsivo e um _overlay_ de busca "click-to-reveal".
 - **Notificações via Telegram:** Bot integrado notifica o admin sobre novos rascunhos.
+- **Publicação Automatizada em Redes Sociais (iPaaS):** Utiliza Webhooks do Supabase que "escutam" eventos de `UPDATE` na tabela `posts`. Quando o `status` de um post muda de `draft` para `published`, ele dispara um cenário no Make.com que publica automaticamente a imagem e o título do post na página oficial do Instagram.
 
 ---
 
@@ -212,6 +216,8 @@ Este projeto demonstra vários padrões de arquitetura avançados:
 3.  **Rotas Protegidas (Middleware):** Todo o painel de admin (`/admin/**`) é protegido usando `middleware.ts` do Next.js. Ele verifica a sessão de autenticação do usuário e o redireciona para `/login` se não estiver autenticado.
 
 4.  **Backend-for-Frontend (BFF) Paralelo:** As API Routes do Cron Job atuam como um BFF, orquestrando múltiplas tarefas complexas (`Promise.all`) para alimentar o frontend, tudo isso gerenciando os limites de tempo da plataforma (`maxDuration`).
+
+5.  **Pipeline de Publicação Orientado a Eventos (Workflow iPaaS):** O projeto demonstra uma arquitetura avançada orientada a eventos. Em vez de um botão manual de "publicar no social", o próprio banco de dados é o gatilho. Um Webhook do Supabase escuta por eventos `UPDATE`. Quando um admin publica um post, o webhook envia instantaneamente os dados (o `record` e o `old_record`) para um cenário no Make.com (iPaaS). Este cenário valida a mudança de status (`old_record.status == 'draft'` E `record.status == 'published'`) e dispara imediatamente a API do Instagram, completando o pipeline 'conteúdo-para-social' de forma assíncrona, sem cliques extras do admin.
 
 ---
 
