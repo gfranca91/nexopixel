@@ -67,16 +67,20 @@ export default function Footer() {
             </h3>
             <div className="mt-4 flex space-x-4 justify-center lg:justify-start">
               <a
-                href="#"
+                href="https://www.facebook.com/profile.php?id=61583616443898"
                 className="rounded-md bg-gray-800 p-2 text-white hover:bg-gray-700"
                 aria-label="Facebook"
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 <IconFacebook />
               </a>
               <a
-                href="#"
+                href="https://www.instagram.com/nexopixel_blog/"
                 className="rounded-md bg-gray-800 p-2 text-white hover:bg-gray-700"
                 aria-label="Instagram"
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 <IconInstagram />
               </a>
