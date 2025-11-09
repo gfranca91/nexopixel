@@ -2,15 +2,9 @@ import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabaseAdmin } from "../../../../lib/supabaseAdmin";
 import { uploadAndProcessImage } from "../../../../lib/uploadImage";
-import { setDefaultResultOrder } from "dns";
 import type { Database } from "../../../../lib/database.types";
 
 type PostInsert = Database["public"]["Tables"]["posts"]["Insert"];
-
-if (process.env.NODE_ENV === "development") {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-  setDefaultResultOrder("ipv4first");
-}
 
 export const maxDuration = 60;
 

@@ -2,15 +2,9 @@ import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabaseAdmin } from "../../../../lib/supabaseAdmin";
 import { uploadAndProcessImage } from "../../../../lib/uploadImage";
-import { setDefaultResultOrder } from "dns";
 import type { Database } from "../../../../lib/database.types";
 
 type PostInsert = Database["public"]["Tables"]["posts"]["Insert"];
-
-if (process.env.NODE_ENV === "development") {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-  setDefaultResultOrder("ipv4first");
-}
 
 export const maxDuration = 60;
 
@@ -118,8 +112,152 @@ async function processCategory(
   }
 }
 
+const getISODate = (date: Date): string => date.toISOString().split("T")[0];
+
+interface WeekDate {
+  jsDate: Date;
+  dayName: string;
+  dateString: string;
+}
+
+const getWeeklyDateRange = (): {
+  startDateISO: string;
+  endDateISO: string;
+  weekDates: WeekDate[];
+  longStartDate: string;
+  longEndDate: string;
+  currentYear: string;
+} => {
+  const startDate = new Date();
+  const endDate = new Date();
+  endDate.setDate(startDate.getDate() + 6);
+
+  const longFormatter = new Intl.DateTimeFormat("pt-BR", {
+    day: "numeric",
+    month: "long",
+  });
+  const yearFormatter = new Intl.DateTimeFormat("pt-BR", { year: "numeric" });
+  const shortFormatter = new Intl.DateTimeFormat("pt-BR", {
+    day: "numeric",
+    month: "numeric",
+    year: "2-digit",
+  });
+  const dayFormatter = new Intl.DateTimeFormat("pt-BR", { weekday: "long" });
+
+  let weekDates: WeekDate[] = [];
+  for (let i = 0; i <= 6; i++) {
+    const day = new Date(startDate);
+    day.setDate(day.getDate() + i);
+    weekDates.push({
+      jsDate: new Date(day.setHours(0, 0, 0, 0)),
+      dayName: dayFormatter.format(day),
+      dateString: shortFormatter.format(day),
+    });
+  }
+
+  return {
+    startDateISO: getISODate(startDate),
+    endDateISO: getISODate(endDate),
+    weekDates,
+    longStartDate: longFormatter.format(startDate),
+    longEndDate: longFormatter.format(endDate),
+    currentYear: yearFormatter.format(startDate),
+  };
+};
+
+type Release = { date: string; title: string; platform: string };
+
+async function getMovieReleases(
+  apiKey: string,
+  startDate: string,
+  endDate: string
+): Promise<Release[]> {
+  try {
+    const url = `https://api.themoviedb.org/3/discover/movie?api_key=${apiKey}&language=pt-BR&region=BR&release_date.gte=${startDate}&release_date.lte=${endDate}&sort_by=popularity.desc`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error("Falha ao buscar TMDB Filmes");
+      return [];
+    }
+    const data = await response.json();
+    return (data.results || []).slice(0, 5).map((item: any) => ({
+      date: item.release_date,
+      title: item.title,
+      platform: "Cinema",
+    }));
+  } catch (e) {
+    console.error("Erro no getMovieReleases:", e);
+    return [];
+  }
+}
+
+async function getTvReleases(
+  apiKey: string,
+  startDate: string,
+  endDate: string
+): Promise<Release[]> {
+  try {
+    const url = `https://api.themoviedb.org/3/discover/tv?api_key=${apiKey}&language=pt-BR&region=BR&first_air_date.gte=${startDate}&first_air_date.lte=${endDate}&sort_by=popularity.desc&with_watch_providers=8|9|337|119|283&watch_region=BR`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error("Falha ao buscar TMDB Séries/Animes");
+      return [];
+    }
+    const data = await response.json();
+
+    return (data.results || []).slice(0, 10).map((item: any) => {
+      let platform = "Streaming";
+      const providers = item.watch_provider_ids;
+      if (providers && providers.length > 0) {
+        if (providers.includes(8)) platform = "Netflix";
+        else if (providers.includes(9)) platform = "Amazon Prime Video";
+        else if (providers.includes(337)) platform = "Disney+";
+        else if (providers.includes(119)) platform = "Amazon Prime Video";
+        else if (providers.includes(283)) platform = "Crunchyroll";
+      }
+
+      return {
+        date: item.first_air_date,
+        title: item.name,
+        platform: platform,
+      };
+    });
+  } catch (e) {
+    console.error("Erro no getTvReleases:", e);
+    return [];
+  }
+}
+
+async function getGameReleases(
+  apiKey: string,
+  startDate: string,
+  endDate: string
+): Promise<Release[]> {
+  try {
+    const url = `https://api.rawg.io/api/games?key=${apiKey}&dates=${startDate},${endDate}&ordering=-popularity&page_size=5`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error("Falha ao buscar RAWG Games");
+      return [];
+    }
+    const data = await response.json();
+    return (data.results || []).map((item: any) => ({
+      date: item.released,
+      title: item.name,
+      platform:
+        item.platforms?.map((p: any) => p.platform.name).join(", ") || "PC",
+    }));
+  } catch (e) {
+    console.error("Erro no getGameReleases:", e);
+    return [];
+  }
+}
+
 async function generateWeeklyRecapPost(
   geminiKey: string,
+  tmdbKey: string,
+  rawgKey: string,
   authorId: number | null
 ): Promise<PostInsert | null> {
   if (!authorId) {
@@ -127,57 +265,74 @@ async function generateWeeklyRecapPost(
     return null;
   }
 
-  const startDate = new Date();
-  const endDate = new Date();
-  endDate.setDate(startDate.getDate() + 6);
-
-  const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
-    day: "numeric",
-    month: "long",
-  });
-  const yearFormatter = new Intl.DateTimeFormat("pt-BR", { year: "numeric" });
-
-  const startDateString = dateFormatter.format(startDate);
-  const endDateString = dateFormatter.format(endDate);
-  const currentYear = yearFormatter.format(startDate);
-
-  const slugDate = startDate.toISOString().split("T")[0];
+  const {
+    startDateISO,
+    endDateISO,
+    weekDates,
+    longStartDate,
+    longEndDate,
+    currentYear,
+  } = getWeeklyDateRange();
 
   try {
-    console.log("PROCESSANDO: Resumo Semanal de Lançamentos");
+    console.log("PROCESSANDO: Resumo Semanal (Buscando dados reais...)");
+
+    const [movieData, tvData, gameData] = await Promise.all([
+      getMovieReleases(tmdbKey, startDateISO, endDateISO),
+      getTvReleases(tmdbKey, startDateISO, endDateISO),
+      getGameReleases(rawgKey, startDateISO, endDateISO),
+    ]);
+
+    const allReleases: Release[] = [...movieData, ...tvData, ...gameData];
+
+    if (allReleases.length === 0) {
+      console.log("Nenhum lançamento real encontrado nas APIs.");
+      return null;
+    }
+
+    let dataForPrompt = "";
+    for (const day of weekDates) {
+      const dayISO = getISODate(day.jsDate);
+
+      const releasesForThisDay = allReleases.filter((r) => r.date === dayISO);
+
+      dataForPrompt += `## ${day.dayName} (${day.dateString})\n`;
+
+      if (releasesForThisDay.length === 0) {
+        dataForPrompt += "* Sem lançamentos notáveis\n";
+      } else {
+        for (const release of releasesForThisDay) {
+          dataForPrompt += `* ${release.title} (${release.platform})\n`;
+        }
+      }
+      dataForPrompt += "\n";
+    }
+
+    console.log("PROCESSANDO: Enviando dados pré-formatados para o Gemini.");
     const genAI = new GoogleGenerativeAI(geminiKey);
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
 
     const prompt = `
-      Você é o "Radar Semanal", redator especialista em lançamentos do blog "NexoPixel".
-      Sua tarefa é criar um post listando os PRINCIPAIS lançamentos da semana, começando de ${startDateString} até ${endDateString} de ${currentYear}.
+      Você é o "Radar Semanal", um redator do blog "NexoPixel".
+      Sua tarefa é criar um post de blog "Lançamentos da Semana" a partir da lista de dados que vou fornecer.
 
-      Regras:
-      1. Crie um título chamativo, ex: "Lançamentos da Semana (${startDateString} a ${endDateString}): Os Destaques de Games, Cinema, Séries e Animes".
-      2. O "content" deve ser uma lista organizada por dia e categoria. Use Markdown.
-      3. O artigo deve focar apenas nos lançamentos MAIS AGUARDADOS e RELEVANTES. Não liste tudo, apenas os destaques.
-      4. Crie um slug para a URL.
-      5. Sugira um array com 4 tags (ex: "Lançamentos", "Cinema", "Games", "Séries").
+      REGRAS:
+      1. Crie um título chamativo para o post, ex: "Lançamentos da Semana (${longStartDate} a ${longEndDate}): O Que Jogar e Assistir".
+      2. O "content" deve começar com uma breve introdução (1 parágrafo).
+      3. DEPOIS dessa frase, cole A LISTA DE DADOS PRONTA que eu forneci abaixo, sem NENHUMA alteração.
+      4. Crie um slug e 4 tags.
+      5. Responda APENAS com um objeto JSON válido.
 
-      Exemplo de formato para o "content":
-      "Aqui estão os destaques mais esperados que chegam esta semana...
+      LISTA DE DADOS PRONTA (COLE ISSO EXATAMENTE):
+      """
+      ${dataForPrompt}
+      """
 
-      ## Segunda-feira, ${startDateString}
-      * **Nome do Lançamento 1 (Categoria)** - Breve descrição.
-      * **Nome do Lançamento 2 (Categoria)** - Breve descrição.
-
-      ## Terça-feira, ...
-      * Nenhum grande lançamento hoje.
-
-      ## Quarta-feira, ...
-      * **Nome do Lançamento 3 (Categoria)** - Breve descrição.
-      "
-
-      Responda APENAS com um objeto JSON válido:
+      JSON DE SAÍDA:
       {
         "title": "...",
         "content": "...",
-        "slug": "${`lancamentos-semana-${slugDate}`}",
+        "slug": "${`lancamentos-semana-${getISODate(new Date())}`}",
         "tags": ["Lançamentos", "Games", "Séries", "Cinema"]
       }
     `;
@@ -210,13 +365,16 @@ async function generateWeeklyRecapPost(
 }
 
 export async function GET(): Promise<NextResponse> {
-  console.log("CRON MANHÃ (LOTE POR CATEGORIA): Iniciado");
+  console.log("CRON MANHÃ (LOTE): Iniciado");
 
   try {
     const geminiKey = process.env.GOOGLE_GEMINI_API_KEY;
     const newsApiKey = process.env.NEWS_API_KEY;
-    if (!geminiKey || !newsApiKey) {
-      throw new Error("Chaves de API (Gemini ou NewsAPI) não configuradas.");
+    const tmdbKey = process.env.TMDB_API_KEY;
+    const rawgKey = process.env.RAWG_API_KEY;
+
+    if (!geminiKey || !newsApiKey || !tmdbKey || !rawgKey) {
+      throw new Error("Uma ou mais chaves de API não configuradas.");
     }
 
     const { data: authors, error: authorsError } = await supabaseAdmin
@@ -238,24 +396,29 @@ export async function GET(): Promise<NextResponse> {
       if (author.name === "Synapse Semanal") recapAuthorId = author.id;
     });
 
-    const processingPromises: Promise<PostInsert | null>[] = CATEGORY_NAMES.map(
-      (categoryName) =>
-        processCategory(
-          categoryName,
-          CATEGORIES[categoryName],
-          geminiKey,
-          newsApiKey,
-          authorMap.get(categoryName) || null
-        )
-    );
+    const processingPromises: Promise<PostInsert | null>[] = [];
 
     const isMonday = new Date().getDay() === 1;
+
     if (isMonday) {
       console.log(
-        "CRON MANHÃ (LOTE): É Segunda! Adicionando Resumo Semanal..."
+        "CRON MANHÃ (LOTE): É Segunda! Rodando APENAS o Resumo Semanal (com dados reais)..."
       );
       processingPromises.push(
-        generateWeeklyRecapPost(geminiKey, recapAuthorId)
+        generateWeeklyRecapPost(geminiKey, tmdbKey, rawgKey, recapAuthorId)
+      );
+    } else {
+      console.log("CRON MANHÃ (LOTE): Rodando 4 categorias diárias...");
+      CATEGORY_NAMES.forEach((categoryName) =>
+        processingPromises.push(
+          processCategory(
+            categoryName,
+            CATEGORIES[categoryName],
+            geminiKey,
+            newsApiKey,
+            authorMap.get(categoryName) || null
+          )
+        )
       );
     }
 
@@ -266,7 +429,13 @@ export async function GET(): Promise<NextResponse> {
     ) as PostInsert[];
 
     if (validNewPosts.length === 0) {
-      throw new Error("Nenhum artigo pôde ser processado com sucesso.");
+      console.log(
+        "Nenhum artigo pôde ser processado com sucesso (pode ser normal, sem lançamentos)."
+      );
+      return NextResponse.json({
+        message: "Nenhum artigo processado.",
+        posts: [],
+      });
     }
 
     const { data: insertedPosts, error: insertError } = await supabaseAdmin
@@ -289,7 +458,7 @@ export async function GET(): Promise<NextResponse> {
         throw new Error("Chaves do Telegram não configuradas.");
 
       const message = `
-🚀 *${insertedPosts.length} Novos Rascunhos Gerados (NexoPixel)!* 🚀
+🚀 *${insertedPosts.length} Novos Rascunhos Gerados (NexoPixel - MANHÃ)!* 🚀
 
 ${insertedPosts
   .map((p) => `*- Categoria:* ${p.category}\n  *Título:* ${p.title}`)
