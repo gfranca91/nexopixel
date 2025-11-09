@@ -4,7 +4,6 @@ import { useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "../../../../lib/supabase/client";
 import type { Database } from "../../../../lib/database.types";
-import { v4 as uuidv4 } from "uuid";
 
 type Post = Database["public"]["Tables"]["posts"]["Row"];
 
@@ -50,31 +49,31 @@ export default function EditForm({ post }: EditFormProps) {
     let finalImageUrl = imageUrl;
 
     if (file) {
-      setMessage("Enviando imagem...");
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${uuidv4()}.${fileExt}`;
-      const filePath = `processed/${fileName}`;
+      setMessage("Enviando e processando imagem...");
 
-      const { error: uploadError } = await supabase.storage
-        .from("post-images")
-        .upload(filePath, file);
+      const formData = new FormData();
+      formData.append("file", file);
 
-      if (uploadError) {
-        setMessage(`Erro no upload da imagem: ${uploadError.message}`);
+      try {
+        const response = await fetch("/api/admin/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || "Falha no upload");
+        }
+
+        finalImageUrl = data.imageUrl;
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Erro desconhecido";
+        setMessage(`Erro no upload da imagem: ${errorMessage}`);
         setIsSubmitting(false);
         return;
       }
-
-      const { data: urlData } = supabase.storage
-        .from("post-images")
-        .getPublicUrl(filePath);
-
-      if (!urlData) {
-        setMessage("Erro ao obter URL pública da imagem.");
-        setIsSubmitting(false);
-        return;
-      }
-      finalImageUrl = urlData.publicUrl;
     }
 
     setMessage("Atualizando post...");

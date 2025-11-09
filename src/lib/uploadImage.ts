@@ -1,28 +1,33 @@
-// src/lib/uploadImage.ts
 import sharp from "sharp";
 import { supabaseAdmin } from "./supabaseAdmin";
 import { v4 as uuidv4 } from "uuid";
 
 export async function uploadAndProcessImage(
-  imageUrl: string,
+  source: string | Buffer,
   bucketName: string = "post-images"
 ): Promise<string | null> {
-  if (!imageUrl) {
-    console.warn("URL da imagem não fornecida para processamento.");
+  if (!source) {
+    console.warn("Fonte da imagem não fornecida para processamento.");
     return null;
   }
 
-  try {
-    const response = await fetch(imageUrl);
-    if (!response.ok) {
-      console.error(
-        `Falha ao baixar imagem: ${imageUrl}, Status: ${response.status}`
-      );
-      return null;
-    }
-    const imageBuffer = await response.arrayBuffer();
+  let imageBuffer: Buffer;
 
-    const processedImageBuffer = await sharp(Buffer.from(imageBuffer))
+  try {
+    if (typeof source === "string") {
+      const response = await fetch(source);
+      if (!response.ok) {
+        console.error(
+          `Falha ao baixar imagem: ${source}, Status: ${response.status}`
+        );
+        return null;
+      }
+      imageBuffer = Buffer.from(await response.arrayBuffer());
+    } else {
+      imageBuffer = source;
+    }
+
+    const processedImageBuffer = await sharp(imageBuffer)
       .resize({
         width: 1080,
         height: 1080,
@@ -35,7 +40,7 @@ export async function uploadAndProcessImage(
     const fileName = `${uuidv4()}.jpeg`;
     const filePath = `processed/${fileName}`;
 
-    const { data, error } = await supabaseAdmin.storage
+    const { error } = await supabaseAdmin.storage
       .from(bucketName)
       .upload(filePath, processedImageBuffer, {
         contentType: "image/jpeg",
