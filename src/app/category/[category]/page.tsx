@@ -51,9 +51,10 @@ export default async function CategoryPage({
   searchParams,
 }: {
   params: Promise<{ category: string }>;
-  searchParams: { page?: string };
+  searchParams: Promise<{ page?: string }>;
 }) {
-  const paginaAtual = Number(searchParams.page) || 1;
+  const { page } = await searchParams;
+  const paginaAtual = Number(page) || 1;
 
   const { category: rawCategoryFromUrl } = await params;
   const categoryFromUrl = decodeURIComponent(rawCategoryFromUrl);

@@ -43,7 +43,7 @@ async function getRecapData(pagina: number) {
   }
 
   const totalPaginas = Math.ceil(
-    (count || 0 - OFFSET_DA_HOMEPAGE) / POSTS_POR_PAGINA
+    ((count || 0) - OFFSET_DA_HOMEPAGE) / POSTS_POR_PAGINA
   );
 
   return { posts: posts as PostWithAuthor[], totalPaginas };
@@ -52,9 +52,10 @@ async function getRecapData(pagina: number) {
 export default async function LancamentosPage({
   searchParams,
 }: {
-  searchParams: { page?: string };
+  searchParams: Promise<{ page?: string }>;
 }) {
-  const paginaAtual = Number(searchParams.page) || 1;
+  const { page } = await searchParams;
+  const paginaAtual = Number(page) || 1;
   const { posts, totalPaginas } = await getRecapData(paginaAtual);
 
   const temPaginaAnterior = paginaAtual > 1;
@@ -107,7 +108,7 @@ export default async function LancamentosPage({
         <div className="mt-12 flex justify-between">
           {temPaginaAnterior ? (
             <Link
-              href={`/lancamentos?page=${paginaAtual - 1}`}
+              href={`/releases?page=${paginaAtual - 1}`}
               className="rounded-md bg-gray-800 px-4 py-2 text-white hover:bg-gray-700"
             >
               &larr; Página Anterior
@@ -117,7 +118,7 @@ export default async function LancamentosPage({
           )}
           {temPaginaProxima ? (
             <Link
-              href={`/lancamentos?page=${paginaAtual + 1}`}
+              href={`/releases?page=${paginaAtual + 1}`}
               className="rounded-md bg-gray-800 px-4 py-2 text-white hover:bg-gray-700"
             >
               Próxima Página &rarr;

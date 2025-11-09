@@ -43,7 +43,7 @@ async function getPostsData(pagina: number) {
   }
 
   const totalPaginas = Math.ceil(
-    (count || 0 - OFFSET_DA_HOMEPAGE) / POSTS_POR_PAGINA
+    ((count || 0) - OFFSET_DA_HOMEPAGE) / POSTS_POR_PAGINA
   );
 
   return { posts: posts as PostWithAuthor[], totalPaginas };
@@ -52,9 +52,10 @@ async function getPostsData(pagina: number) {
 export default async function PostsPage({
   searchParams,
 }: {
-  searchParams: { page?: string };
+  searchParams: Promise<{ page?: string }>;
 }) {
-  const paginaAtual = Number(searchParams.page) || 1;
+  const { page } = await searchParams;
+  const paginaAtual = Number(page) || 1;
   const { posts, totalPaginas } = await getPostsData(paginaAtual);
 
   const temPaginaAnterior = paginaAtual > 1;
