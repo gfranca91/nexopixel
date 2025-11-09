@@ -1,3 +1,4 @@
+// src/lib/uploadImage.ts
 import sharp from "sharp";
 import { supabaseAdmin } from "./supabaseAdmin";
 import { v4 as uuidv4 } from "uuid";
@@ -28,7 +29,7 @@ export async function uploadAndProcessImage(
         fit: sharp.fit.cover,
         position: sharp.strategy.attention,
       })
-      .jpeg({ quality: 85 })
+      .jpeg({ quality: 75, progressive: true })
       .toBuffer();
 
     const fileName = `${uuidv4()}.jpeg`;
