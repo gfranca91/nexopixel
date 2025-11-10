@@ -4,7 +4,7 @@
 
 [![Next.js](https://img.shields.io/badge/Next.js-14+-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.io/)
 [![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com/)
 
@@ -32,37 +32,37 @@ A "human-in-the-loop" (the admin) then logs into a secure dashboard to review, e
 ## ✨ Features (Funcionalidades)
 
 - **Automated Content Pipeline:** Daily Cron Jobs (Morning & Afternoon) generate content automatically.
-- **AI-Powered Generation:** Uses Google Gemini (`gemini-2.5-pro`) with advanced prompt engineering to generate structured JSON output for both news re-writing and original content (weekly recaps).
+- **AI-Powered Generation:** Uses Google Gemini (`gemini-2.5-pro`) with advanced prompt engineering to generate structured JSON output.
 - **Parallel Processing:** Uses `Promise.all()` to process all categories simultaneously, respecting Vercel's `maxDuration = 60` limit.
 - **Backend Image Processing:** A server-side pipeline downloads, resizes (with `sharp`), and uploads images to Supabase Storage.
-- **Secure Admin Panel & CMS:** A protected `/admin` route (using Next.js Middleware) with full CRUD (Create, Read, Update, Delete) functionality for all posts.
+- **Secure Admin Panel & CMS:** A protected `/admin` route (using Next.js Middleware) with full CRUD (Create, Read, Update, Delete) functionality.
 - **Dynamic Frontend (App Router):**
   - Fully responsive `page.tsx` with a modern, multi-grid layout.
   - Dynamic pages for posts (`[slug]`) and categories (`[category]`).
   - Advanced pagination with offsets on `/posts` and `/releases` pages.
-  - Server-side search functionality (`/search`) querying the database.
+  - Server-side search functionality (`/search`).
 - **Polished UI/UX:** A complex `"use client"` Header with a responsive hamburger menu and a "click-to-reveal" search overlay.
 - **Telegram Notifications:** Integrated bot notifies admin of new drafts.
-- **Automated Social Publishing (iPaaS):** Uses Supabase Webhooks listening to `UPDATE` events on the `posts` table. When a post's `status` changes from `draft` to `published`, it triggers a Make.com scenario that automatically publishes the post's image and title to the official Instagram page.
+- **Automated Social Publishing (iPaaS):** Uses Supabase Webhooks listening to `UPDATE` events. When a post's `status` changes from `draft` to `published`, it triggers a Make.com scenario that automatically summarizes the content via Gemini and publishes the post's image and new caption to Instagram.
 
 ---
 
 ## 🛠️ Tech Stack (Tecnologias Utilizadas)
 
-| Category             | Technology                         |
-| :------------------- | :--------------------------------- |
-| **Framework**        | **Next.js 14+** (App Router)       |
-| **Language**         | **TypeScript**                     |
-| **Styling**          | **Tailwind CSS**                   |
-| **Database**         | **Supabase** (PostgreSQL)          |
-| **Auth**             | **Supabase Auth** (Email/Password) |
-| **File Storage**     | **Supabase Storage**               |
-| **AI**               | **Google Gemini Pro**              |
-| **Data Source**      | **NewsAPI.org**                    |
-| **Automation**       | **Vercel Cron Jobs**               |
-| **Deployment**       | **Vercel**                         |
-| **Image Processing** | `sharp`                            |
-| **Rendering**        | `react-markdown`                   |
+| Category             | Technology                                  |
+| :------------------- | :------------------------------------------ |
+| **Framework**        | **Next.js 14+** (App Router)                |
+| **Language**         | **TypeScript**                              |
+| **Styling**          | **Tailwind CSS 4**                          |
+| **Database**         | **Supabase** (PostgreSQL)                   |
+| **Auth**             | **Supabase Auth** (Email/Password)          |
+| **File Storage**     | **Supabase Storage**                        |
+| **AI**               | **Google Gemini Pro**                       |
+| **Data Source**      | **NewsAPI.org, TMDB, RAWG.io**              |
+| **Automation**       | **Vercel Cron Jobs** & **Make.com (iPaaS)** |
+| **Deployment**       | **Vercel**                                  |
+| **Image Processing** | `sharp`                                     |
+| **Rendering**        | `react-markdown`                            |
 
 ---
 
@@ -72,20 +72,22 @@ This project demonstrates several advanced architecture patterns:
 
 1.  **Security (RLS & Dual Clients):** The application uses two Supabase clients.
 
-    - **Client-Side (Public):** A read-only `anon` client, heavily restricted by **Row Level Security (RLS)** policies in PostgreSQL. The public can _only_ `SELECT` posts where `status = 'published'`.
-    - **Server-Side (Admin):** A `supabaseAdmin` client (using the `service_role` key) in API Routes and Server Components. This client bypasses RLS to perform administrative tasks (like saving drafts), guaranteeing a secure separation of concerns.
+    - **Client-Side (Public):** A read-only `anon` client, heavily restricted by **Row Level Security (RLS)** policies in PostgreSQL.
+    - **Server-Side (Admin):** A `supabaseAdmin` client (using the `service_role` key) in API Routes and Server Components, bypassing RLS to perform administrative tasks.
 
-2.  **Server-Side Data Fetching:** All data fetching is done on the server using Server Components, `async/await`, and server-side route handlers, ensuring the client receives fast, pre-rendered HTML.
+2.  **Server-Side Data Fetching:** All data fetching is done on the server using Server Components, `async/await`, and server-side route handlers.
 
-3.  **Protected Routes (Middleware):** The entire admin dashboard (`/admin/**`) is protected using Next.js `middleware.ts`. It verifies the user's auth session and redirects them to `/login` if they are not authenticated.
+3.  **Protected Routes (Middleware):** The entire admin dashboard (`/admin/**`) is protected using Next.js `middleware.ts`.
 
-4.  **Parallel Backend-for-Frontend (BFF):** The Cron Job API routes act as a BFF, orchestrating multiple complex tasks (`Promise.all`) to feed data to the frontend, all while managing platform time limits (`maxDuration`).
+4.  **Parallel Backend-for-Frontend (BFF):** The Cron Job API routes act as a BFF, orchestrating multiple complex tasks (`Promise.all`) to feed data to the frontend.
 
-5.  **Event-Driven Publishing (iPaaS Workflow):** The project demonstrates an advanced event-driven architecture. Instead of a manual "publish to social" button, the database itself is the trigger. A Supabase Webhook listens for `UPDATE` events. When an admin publishes a post, the webhook instantly sends a payload (with the `record` and `old_record`) to a Make.com (iPaaS) scenario. This scenario validates the status change (`old_record.status == 'draft'` AND `record.status == 'published'`) and immediately triggers the Instagram API, completing the 'content-to-social' pipeline asynchronously without any extra clicks from the admin.
+5.  **Event-Driven Publishing (iPaaS Workflow):** The project demonstrates an advanced event-driven architecture. A Supabase Webhook listens for `UPDATE` events. When an admin publishes a post, the webhook instantly triggers a Make.com (iPaaS) scenario. This scenario validates the change (`draft` -> `published`), generates a summary with Gemini, and triggers the Instagram API, completing the 'content-to-social' pipeline asynchronously.
 
 ---
 
 ## 🚀 Getting Started (Como Rodar o Projeto)
+
+_(Requires Node.js 18.17+ or later)_
 
 1.  **Clone the repository:**
 
@@ -104,19 +106,21 @@ This project demonstrates several advanced architecture patterns:
     Create a `.env.local` file in the root and add all the required Supabase, API, and Admin credentials:
 
     ```env
-    # Supabase (find these in your Supabase project settings)
+    # Supabase
     NEXT_PUBLIC_SUPABASE_URL=...
     NEXT_PUBLIC_SUPABASE_ANON_KEY=...
     SUPABASE_SERVICE_ROLE_KEY=...
 
-    # APIs (get these from their respective developer dashboards)
+    # APIs
     GOOGLE_GEMINI_API_KEY=...
     NEWS_API_KEY=...
+    TMDB_API_KEY=...
+    RAWG_API_KEY=...
 
-    # Admin (your email, for middleware to protect /admin)
+    # Admin
     ADMIN_EMAIL=seu-email@gmail.com
 
-    # Telegram (for bot notifications)
+    # Telegram
     TELEGRAM_BOT_TOKEN=...
     TELEGRAM_CHAT_ID=...
     ```
@@ -140,7 +144,7 @@ This project demonstrates several advanced architecture patterns:
 
 [![Next.js](https://img.shields.io/badge/Next.js-14+-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.io/)
 [![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com/)
 
@@ -157,7 +161,7 @@ Esse pipeline, construído sobre as API Routes do Next.js, executa múltiplas ta
 1.  **Busca** notícias do mundo real na NewsAPI para 4 categorias diferentes.
 2.  **Processa** a imagem de cada artigo usando a biblioteca `sharp` (redimensionando, cortando para 1:1) e faz o upload para o Supabase Storage.
 3.  **Gera** novos posts de blog originais, fornecendo os dados da notícia ao Google Gemini Pro com prompts altamente específicos e baseados em "personas".
-4.  **Cria** um post especial de "Resumo Semanal" toda segunda-feira, usando um prompt separado e consciente dos dados.
+4.  **Cria** um post especial de "Resumo Semanal" toda segunda-feira (usando dados reais das APIs do TMDB e RAWG) e o formata com Gemini.
 5.  **Salva** todo o conteúdo gerado como `drafts` (rascunhos) no banco de dados PostgreSQL.
 6.  **Notifica** o administrador sobre novos rascunhos através de um bot do Telegram.
 
@@ -168,37 +172,37 @@ Um "humano-no-circuito" (o administrador) então entra em um painel seguro para 
 ## ✨ Funcionalidades
 
 - **Pipeline de Conteúdo Automatizado:** Cron Jobs diários (Manhã e Tarde) geram conteúdo automaticamente.
-- **Geração por IA:** Usa o Google Gemini (`gemini-2.5-pro`) com engenharia de prompt avançada para gerar JSON estruturado, tanto para reescrever notícias quanto para criar conteúdo original (resumos semanais).
+- **Geração por IA:** Usa o Google Gemini (`gemini-2.5-pro`) com engenharia de prompt avançada para gerar JSON estruturado.
 - **Processamento Paralelo:** Usa `Promise.all()` para processar todas as categorias simultaneamente, respeitando o limite de `maxDuration = 60` da Vercel.
 - **Processamento de Imagem no Backend:** Um pipeline server-side baixa, redimensiona (com `sharp`) e faz upload de imagens para o Supabase Storage.
-- **Painel de Admin Seguro & CMS:** Uma rota `/admin` protegida (usando Middleware do Next.js) com funcionalidade completa de CRUD (Create, Read, Update, Delete) para todos os posts.
+- **Painel de Admin Seguro & CMS:** Uma rota `/admin` protegida (usando Middleware do Next.js) com funcionalidade completa de CRUD (Create, Read, Update, Delete).
 - **Frontend Dinâmico (App Router):**
-  - `page.tsx` totalmente responsiva com um layout de grid moderno e complexo.
+  - `page.tsx` totalmente responsiva com um layout de grid moderno.
   - Páginas dinâmicas para posts (`[slug]`) e categorias (`[category]`).
   - Paginação avançada com _offsets_ nas páginas `/posts` e `/releases`.
   - Funcionalidade de busca (`/search`) renderizada no servidor.
 - **UI/UX Polida:** Um Header complexo (`"use client"`) com menu hambúrguer responsivo e um _overlay_ de busca "click-to-reveal".
 - **Notificações via Telegram:** Bot integrado notifica o admin sobre novos rascunhos.
-- **Publicação Automatizada em Redes Sociais (iPaaS):** Utiliza Webhooks do Supabase que "escutam" eventos de `UPDATE` na tabela `posts`. Quando o `status` de um post muda de `draft` para `published`, ele dispara um cenário no Make.com que publica automaticamente a imagem e o título do post na página oficial do Instagram.
+- **Publicação Automatizada em Redes Sociais (iPaaS):** Utiliza Webhooks do Supabase que "escutam" eventos de `UPDATE`. Quando o `status` de um post muda de `draft` para `published`, ele dispara um cenário no Make.com que resume o conteúdo via Gemini e publica a imagem e legenda no Instagram.
 
 ---
 
 ## 🛠️ Tecnologias Utilizadas
 
-| Categoria                   | Tecnologia                      |
-| :-------------------------- | :------------------------------ |
-| **Framework**               | **Next.js 14+** (App Router)    |
-| **Linguagem**               | **TypeScript**                  |
-| **Estilização**             | **Tailwind CSS**                |
-| **Banco de Dados**          | **Supabase** (PostgreSQL)       |
-| **Autenticação**            | **Supabase Auth** (Email/Senha) |
-| **Armazenamento**           | **Supabase Storage**            |
-| **IA**                      | **Google Gemini Pro**           |
-| **Fonte de Dados**          | **NewsAPI.org**                 |
-| **Automação**               | **Vercel Cron Jobs**            |
-| **Deploy**                  | **Vercel**                      |
-| **Processamento de Imagem** | `sharp`                         |
-| **Renderização**            | `react-markdown`                |
+| Categoria                   | Tecnologia                                  |
+| :-------------------------- | :------------------------------------------ |
+| **Framework**               | **Next.js 14+** (App Router)                |
+| **Linguagem**               | **TypeScript**                              |
+| **Estilização**             | **Tailwind CSS 4**                          |
+| **Banco de Dados**          | **Supabase** (PostgreSQL)                   |
+| **Autenticação**            | **Supabase Auth** (Email/Senha)             |
+| **Armazenamento**           | **Supabase Storage**                        |
+| **IA**                      | **Google Gemini Pro**                       |
+| **Fonte de Dados**          | **NewsAPI.org, TMDB, RAWG.io**              |
+| **Automação**               | **Vercel Cron Jobs** & **Make.com (iPaaS)** |
+| **Deploy**                  | **Vercel**                                  |
+| **Processamento de Imagem** | `sharp`                                     |
+| **Renderização**            | `react-markdown`                            |
 
 ---
 
@@ -208,20 +212,22 @@ Este projeto demonstra vários padrões de arquitetura avançados:
 
 1.  **Segurança (RLS & Clientes Duplos):** A aplicação usa dois clientes Supabase.
 
-    - **Lado do Cliente (Público):** Um cliente `anon` (anônimo) somente leitura, fortemente restringido por políticas de **RLS (Row Level Security)** no PostgreSQL. O público só pode fazer `SELECT` em posts com `status = 'published'`.
-    - **Lado do Servidor (Admin):** Um cliente `supabaseAdmin` (usando a `service_role` key) nas API Routes e Server Components. Este cliente ignora o RLS para realizar tarefas administrativas (como salvar rascunhos), garantindo uma separação segura de responsabilidades.
+    - **Lado do Cliente (Público):** Um cliente `anon` (anônimo) somente leitura, fortemente restringido por políticas de **RLS (Row Level Security)** no PostgreSQL.
+    - **Lado do Servidor (Admin):** Um cliente `supabaseAdmin` (usando a `service_role` key) nas API Routes e Server Components, ignorando o RLS para realizar tarefas administrativas.
 
-2.  **Data Fetching no Servidor:** Toda a busca de dados é feita no servidor usando Server Components, `async/await` e _route handlers_ server-side, garantindo que o cliente receba um HTML rápido e pré-renderizado.
+2.  **Data Fetching no Servidor:** Toda a busca de dados é feita no servidor usando Server Components, `async/await` e _route handlers_ server-side.
 
-3.  **Rotas Protegidas (Middleware):** Todo o painel de admin (`/admin/**`) é protegido usando `middleware.ts` do Next.js. Ele verifica a sessão de autenticação do usuário e o redireciona para `/login` se não estiver autenticado.
+3.  **Rotas Protegidas (Middleware):** Todo o painel de admin (`/admin/**`) é protegido usando `middleware.ts` do Next.js.
 
-4.  **Backend-for-Frontend (BFF) Paralelo:** As API Routes do Cron Job atuam como um BFF, orquestrando múltiplas tarefas complexas (`Promise.all`) para alimentar o frontend, tudo isso gerenciando os limites de tempo da plataforma (`maxDuration`).
+4.  **Backend-for-Frontend (BFF) Paralelo:** As API Routes do Cron Job atuam como um BFF, orquestrando múltiplas tarefas complexas (`Promise.all`) para alimentar o frontend.
 
-5.  **Pipeline de Publicação Orientado a Eventos (Workflow iPaaS):** O projeto demonstra uma arquitetura avançada orientada a eventos. Em vez de um botão manual de "publicar no social", o próprio banco de dados é o gatilho. Um Webhook do Supabase escuta por eventos `UPDATE`. Quando um admin publica um post, o webhook envia instantaneamente os dados (o `record` e o `old_record`) para um cenário no Make.com (iPaaS). Este cenário valida a mudança de status (`old_record.status == 'draft'` E `record.status == 'published'`) e dispara imediatamente a API do Instagram, completando o pipeline 'conteúdo-para-social' de forma assíncrona, sem cliques extras do admin.
+5.  **Pipeline de Publicação Orientado a Eventos (Workflow iPaaS):** O projeto demonstra uma arquitetura avançada orientada a eventos. Um Webhook do Supabase escuta por eventos `UPDATE`. Quando um admin publica um post, o webhook instantaneamente dispara um cenário no Make.com (iPaaS). Este cenário valida a mudança (`draft` -> `published`), gera um resumo com Gemini, e dispara a API do Instagram, completando o pipeline 'conteúdo-para-social' de forma assíncrona.
 
 ---
 
 ## 🚀 Como Rodar o Projeto
+
+_(Requer Node.js 18.17+ ou superior)_
 
 1.  **Clone o repositório:**
 
@@ -240,19 +246,21 @@ Este projeto demonstra vários padrões de arquitetura avançados:
     Crie um arquivo `.env.local` na raiz do projeto e adicione todas as credenciais necessárias do Supabase, APIs e Admin:
 
     ```env
-    # Supabase (encontre no painel do seu projeto Supabase)
+    # Supabase
     NEXT_PUBLIC_SUPABASE_URL=...
     NEXT_PUBLIC_SUPABASE_ANON_KEY=...
     SUPABASE_SERVICE_ROLE_KEY=...
 
-    # APIs (obtenha nos seus respectivos painéis de desenvolvedor)
+    # APIs
     GOOGLE_GEMINI_API_KEY=...
     NEWS_API_KEY=...
+    TMDB_API_KEY=...
+    RAWG_API_KEY=...
 
-    # Admin (seu email, para o middleware proteger o /admin)
+    # Admin
     ADMIN_EMAIL=seu-email@gmail.com
 
-    # Telegram (para notificações do bot)
+    # Telegram
     TELEGRAM_BOT_TOKEN=...
     TELEGRAM_CHAT_ID=...
     ```
