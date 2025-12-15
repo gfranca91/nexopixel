@@ -66,7 +66,7 @@ async function processCategory(
       article.urlToImage || ""
     );
     const genAI = new GoogleGenerativeAI(geminiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3.0-pro" });
     const prompt = `
       Você é um redator especialista para o blog "NexoPixel" (categoria: ${category}).
       Crie um post de blog a partir da seguinte notícia.
