@@ -66,7 +66,7 @@ async function processCategory(
       article.urlToImage || ""
     );
     const genAI = new GoogleGenerativeAI(geminiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     const prompt = `
       Você é um redator especialista para o blog "NexoPixel" (categoria: ${category}).
       Crie um post de blog a partir da seguinte notícia.
@@ -310,7 +310,7 @@ async function generateWeeklyRecapPost(
 
     console.log("PROCESSANDO: Enviando dados pré-formatados para o Gemini.");
     const genAI = new GoogleGenerativeAI(geminiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `
       Você é o "Radar Semanal", um redator do blog "NexoPixel".
